@@ -156,6 +156,7 @@ module Sensu
         check[:executed] ||= Time.now.to_i
         validate_check_result(check)
         publish_check_result(check)
+        cancel_watchdog
         respond("ok")
       end
 
@@ -167,11 +168,14 @@ module Sensu
       def parse_check_result(data)
         begin
           check = MultiJson.load(data)
-          cancel_watchdog
           process_check_result(check)
-        rescue MultiJson::ParseError, ArgumentError => error
+        rescue => error
           if @protocol == :tcp
             @parse_error = error.to_s
+            @logger.debug("failed to process check result from tcp socket, waiting for more data ...", {
+              :data => data,
+              :error => error.to_s
+            })
           else
             raise error
           end
